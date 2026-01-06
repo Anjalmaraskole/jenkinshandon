@@ -1,23 +1,70 @@
 pipeline {
     agent any
-    environment {
-        DOCKERHUB_CRED = credentials('6f41729b-b494-4b6b-a9de-a3c5f83730dc')
+
+    parameters {
+        choice(
+            name: 'ENVIRONMENT',
+            choices: ['DEV', 'PROD'],
+            description: 'Select environment'
+        )
     }
+
+    environment {
+        APP_NAME = "DiskMonitor"
+        DISK_LIMIT = "80"
+    }
+
     stages {
-        stage('Build Docker Image') {
+
+        stage('Pre Check') {
             steps {
-                bat 'docker build -t anjali789/simple-web-apppp:$BUILD_NUMBER .'
+                echo "Starting ${APP_NAME} pipeline"
+                echo "Environment selected: ${params.ENVIRONMENT}"
             }
         }
-        stage('Login to DockerHub') {
+
+        stage('Disk Usage Check') {
+            when {
+                expression { params.ENVIRONMENT == 'PROD' }
+            }
+            options {
+                timeout(time: 1, unit: 'MINUTES')
+            }
             steps {
-                bat "echo $DOCKERHUB_CRED_PSW | docker login -u $DOCKERHUB_CRED_USR --password-stdin"
+                retry(2) {
+                    sh '''
+                    usage=$(df / | awk 'NR==2 {print $5}' | sed 's/%//')
+                    echo "Current Disk Usage: $usage%"
+                    if [ $usage -gt $DISK_LIMIT ]; then
+                        echo "Disk usage exceeded limit"
+                        exit 1
+                    else
+                        echo "Disk usage under control"
+                    fi
+                    '''
+                }
             }
         }
-        stage('Push to DockerHub') {
-            steps {
-                bat 'docker push anjali789/simple-web-app:$BUILD_NUMBER'
+
+        stage('DEV Skip Message') {
+            when {
+                expression { params.ENVIRONMENT == 'DEV' }
             }
+            steps {
+                echo "Disk check skipped in DEV environment"
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ ${APP_NAME} pipeline SUCCESS"
+        }
+        failure {
+            echo "❌ ${APP_NAME} pipeline FAILED"
+        }
+        always {
+            echo "🔔 Pipeline execution completed"
         }
     }
 }
