@@ -1,47 +1,41 @@
 pipeline {
     agent any
 
-    stages {
-
-        stage('Pre-Validation') {
-            steps {
-                echo "Pipeline started"
-            }
-        }
-
-        stage('Manual Approval for PROD') {
-            steps {
-                input message: 'Approve deployment to PROD?', ok: 'Deploy'
-            }
-        }
-
-        stage('Critical Operation') {
-            steps {
-                catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
-                    sh '''
-                    echo "Running critical operation"
-                    exit 1
-                    '''
-                }
-            }
-        }
-
-        stage('Post-Critical Steps') {
-            steps {
-                echo "Pipeline continues even after failure"
-            }
-        }
+    environment {
+        ECR_REPO = '596569258291.dkr.ecr.us-east-1.amazonaws.com/my-app'
+        IMAGE_TAG = "${GIT_COMMIT}"
     }
 
-    post {
-        always {
-            echo "Cleanup & reporting executed"
+    stages {
+        stage('Checkout') {
+            steps {
+                git 'https://github.com/username/my-app.git'
+            }
         }
-        unstable {
-            echo "Build marked as UNSTABLE due to controlled failure"
+
+        stage('Build Docker Image') {
+            steps {
+                sh 'docker build -t $ECR_REPO:$IMAGE_TAG .'
+            }
         }
-        success {
-            echo "Build successful"
+
+        stage('Push to ECR') {
+            steps {
+                sh '''
+                aws ecr get-login-password --region us-east-1 | \
+                docker login --username AWS --password-stdin 596569258291.dkr.ecr.us-east-1.amazonaws.com
+                docker push $ECR_REPO:$IMAGE_TAG
+                '''
+            }
+        }
+
+        stage('Deploy to EKS') {
+            steps {
+                sh '''
+                aws eks --region us-east-1 update-kubeconfig --name my-cluster
+                kubectl set image deployment/my-app my-app=$ECR_REPO:$IMAGE_TAG --record
+                '''
+            }
         }
     }
 }
