@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+ metadata: 
+    name: my-app
+  spec:
+     replicas: 2
+      selector:
+        matchLabel:
+          app: my-app
+    template:
+       matadta:
+         app: my-app
+
+         spec:
+           container:
+              -image: 596569258291.dkr.ecr.us-east-1.amazonaws.com/my-app:latest
+              name:
+              port:
+                -contanerport: 80
+              
