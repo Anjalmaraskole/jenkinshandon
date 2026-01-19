@@ -1,0 +1,13 @@
+apiVersion: apps/v1
+ kind: service
+  metadata: 
+    name: my-app-service
+   spec:
+      cluster type: nodeport
+      selector:
+        app: my-app
+         port:
+              protocol: TCP
+              port: 80
+              targetport: 80
+               
